@@ -1,0 +1,499 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 07/20/2019 10:03:56 PM
+// Design Name: 
+// Module Name: all
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+module debouncer( input en,
+                         clk,
+                         output out);
+ reg q0, q1, q2;
+                         
+ always@(posedge clk) begin
+         q0 <= en; 
+         q1<= q0; 
+         q2 <= q1;            
+      end                   
+  and (out, q0,q1,q2);                       
+                         
+endmodule
+
+
+module sync( input in, clk, output reg out);
+reg q0;
+always @(posedge clk) begin
+q0 <= in;
+out <= q0;
+end
+endmodule
+
+module risingEdge (i, clk, o);
+input i, clk;
+output reg o;
+reg [1:0]r;
+always @(posedge clk)begin 
+r = {i, r[1]};
+o = (r == 2'b01);
+end
+endmodule 
+
+module ClockDivider #(parameter n = 50000000)(input clk, rst, output reg clk_out);
+reg [31:0] count;
+// Big enough to hold the maximum possible value
+// Increment count
+always @ (posedge clk, posedge rst) begin
+if (rst == 1'b1) // Asynchronous Reset
+count <= 32'b0;
+else
+if (count == n-1)
+count <= 32'b0;
+else
+count <= count + 1;
+end
+// Handle the output clock
+always @ (posedge clk, posedge rst) begin
+if (rst) // Asynchronous Reset
+clk_out <= 0;
+else
+if (count == n-1)
+clk_out <= ~ clk_out;
+end
+endmodule
+
+module count5( adj, go, inc, dec, en, clk, rst, temp, flag);
+ input adj, go, inc, clk, rst, en, dec, flag; 
+ output reg[3:0] temp;
+ always @(posedge clk ) begin 
+if(rst) 
+temp <= 4'b0000; 
+else begin 
+if(en && ~adj) 
+if(temp == 5)
+temp <= 4'b0000;
+else 
+temp <= temp +1;
+else if(adj) begin	
+if(go) begin
+if(temp == 5 && inc && flag)
+temp <= 4'b0;
+else if(temp == 0 && dec&& flag)
+temp <= 4'd5;
+else begin
+if(inc && flag)
+temp <= temp +1;
+else if(dec &&flag )
+temp <= temp -1;
+end
+end
+else 
+temp <= temp;
+end
+end
+end 
+endmodule 
+
+module count9( adj, go, inc, dec, lh, en, h, clk, rst, temp);
+ input adj, go, inc,lh, clk, rst, en, h, dec; 
+ output reg[3:0] temp;
+ 
+ always @(posedge clk) begin 
+if(rst) 
+temp <= 4'b0000; 
+else begin 
+if(en & ~adj) begin
+if(temp == 9 || h)
+temp <= 4'd0;
+else 
+temp <= temp +1;
+end
+else if(adj) begin
+if(go) begin
+if((temp == 9 || h)&& inc)
+temp <= 4'd0;
+else if(temp == 0 && dec)
+if(lh)
+temp <= 4'd3;
+else 
+temp <= 4'd9;
+else begin
+if(inc)
+temp <= temp +1;
+else if(dec)
+temp <= temp -1;
+end
+end
+else 
+temp <= temp;
+end
+end
+end 
+endmodule
+
+module count2(adj, go, inc, dec, en, clk, rst, temp, flag);
+ input adj, go, inc, clk, rst, en, dec; 
+ input[3:0] flag;
+ output reg[3:0] temp;
+ always @(posedge clk) begin 
+if(rst) 
+temp <= 4'b0000; 
+else begin 
+if(en && ~adj) begin
+if(temp == 2)
+temp <= 4'b0;
+else 
+temp <= temp +1;
+end
+else if(adj) begin	
+if(go) begin
+if(temp == 2 && inc &&flag==3)
+temp <= 4'b0;
+else if(temp == 0 && dec && flag==0)
+temp <= 4'd2;
+else begin
+if((inc &&flag==9&& (temp==1 || temp== 0))|| (inc && flag==3&& temp==2))
+temp <= temp +1;
+else if(dec && flag==0 && temp!=0)
+temp <= temp -1;
+else temp=0;
+end
+end
+else 
+temp <= temp;
+end
+end
+end 
+endmodule 
+
+
+
+module hms(adj, go, inc, dec, mn1,  mn2, ho1, ho2, clk, rst, min1, min2, hour1, hour2);
+input clk, rst,adj, go, inc, mn1,  mn2, ho1, ho2, dec;
+output[3:0] min1, min2, hour1, hour2;
+wire[3:0] msec1, msec2, sec1, sec2;
+count9 ms1( adj, 0, 0, 0, 0, 1, 0, clk, rst, msec1);
+count9 ms2( adj, 0, 0, 0, 0, msec1 == 4'd9, 0, clk, rst, msec2);
+count9 s1( adj, 0, 0, 0, 0, msec1 == 4'd9 && msec2 == 4'd9, 0, clk, rst, sec1);
+count5 s2( adj, 0, 0, 0, sec1 == 4'd9 && msec1 == 4'd9 && msec2 == 4'd9, clk, rst, sec2);
+count9 m1( adj, mn1? go: 0, inc, dec, 0, sec1 == 4'd9 && sec2 == 4'd5 && msec1 == 4'd9 && msec2 == 4'd9, 0, clk, rst, min1);
+count5 m2( adj, mn1? go: 0, inc, dec, sec1 == 4'd9 && sec2 == 4'd5 && msec1 == 4'd9 && msec2 == 4'd9 && min1 == 4'd9, clk, rst, min2, (min1==9));
+count9 h1( adj, ho1? go: 0, inc, dec, hour2 == 2 , msec1 == 4'd9 && msec2 == 4'd9 && sec1 == 4'd9 && sec2 == 4'd5 && min1 == 4'd9 && min2 == 4'd5,  hour2 == 4'd2 && hour1 >= 4'd3, clk, rst, hour1);
+count2 h2( adj, ho1? go: 0, inc, dec, msec1 == 4'd9 && msec2 == 4'd9 && sec1 == 4'd9 && sec2 == 4'd5 && min1 == 4'd9 && min2 == 4'd5 && (hour1 == 4'd9 || hour2 == 4'd2&&hour1==4'd3), clk, rst, hour2,hour1);
+endmodule
+
+/*module alarm22(sel,exit, go, inc, dec, mn1,  mn2, ho1, ho2, min1, min2, hour1, hour2);
+input go, inc, mn1,  mn2, ho1, ho2, dec, exit, sel;
+output[3:0] min1 , min2, hour1, hour2;
+assign done = exit;
+reg [5:0] minutes;
+reg [4:0] hours;
+initial begin
+minutes = 0;
+hours =0;
+end
+always @(*)
+begin
+if(sel==0)
+begin
+if(inc)
+begin
+if(minutes==59)
+minutes=0;
+else minutes = minutes+1;
+end
+else if(dec)
+begin
+if(minutes==0)
+minutes=59;
+else minutes = minutes-1;
+end
+end
+else if (sel==2)
+begin
+if(inc)
+begin
+if(hours==23)
+hours=0;
+else hours = hours+1;
+end
+else if(dec)
+begin
+if(hours==0)
+hours=23;
+else hours = hours-1;
+end
+end
+end
+assign min1 = minutes&10;
+assign min2 = minutes/10;
+assign hour1 = hours%10;
+assign hour2 = hours/10;
+endmodule*/ 
+module alarmON(set, hour1, hour2, min1, min2, ahour1, ahour2, amin1, amin2, stop, clk, out);
+input set, hour1, hour2, min1, min2, ahour1, ahour2, amin1, amin2, stop, clk;
+output reg out;
+always@(posedge clk) begin
+if(set) begin
+if(hour1==ahour1 && hour2==ahour2 && min1 == amin1 && min2 == amin2)
+out <= 1;
+end
+else if(stop) 
+out <= 0;
+end
+endmodule
+
+module segment7(x,o);
+ input [3:0] x;
+ output reg [6:0] o;
+ always @(o, x) begin 
+case(x) 
+       4'b0000: o = 7'b0000001 ;
+            4'b0001: o = 7'b1001111 ;
+            4'b0010:o = 7'b0010010 ;
+            4'b0011:o = 7'b0000110 ;
+            4'b0100:o = 7'b1001100 ;
+            4'b0101:o = 7'b0100100 ;
+            4'b0110:o = 7'b0100000 ;
+            4'b0111:o = 7'b0001111 ;
+            4'b1000:o = 7'b0000000 ;
+            4'b1001:o = 7'b0000100 ;
+            4'b1010:o = 7'b0001000;
+            4'b1011:o = 7'b1100000;
+            4'b1100:o = 7'b0110001;
+            4'b1101:o = 7'b1000010;
+            4'b1110:o = 7'b0110000;
+            4'b1111:o = 7'b0111000;
+endcase
+end 
+endmodule 
+module cDisplay (en, d);
+input [3:0] en;
+output reg[3:0] d;
+always@(en) begin 
+d = ~en;
+end 
+endmodule 
+
+module switcher (clk, d);
+input clk;
+output reg [3:0] d = 4'b0001;
+always@(posedge clk) begin 
+case(d)
+4'b0001: d <= 4'b0010;
+4'b0010: d <= 4'b0100;
+4'b0100: d <= 4'b1000;
+4'b1000: d <= 4'b0001;
+endcase
+end 
+endmodule
+
+module adjustSwitcher(left, right, clk, rst, out, clk_mood, clock_mood,  out1,out2,out3,out4);
+input left, right, clk, rst ,clock_mood, clk_mood;
+output reg out1,out2,out3,out4;
+output reg [1:0] out = 2'd0;
+always@(posedge clk) begin
+if(rst) begin
+out <= 2'd0; out1=0; out2=0; out3=0; out4=0;  end
+else begin
+if (out ==2'd2 &&1)  begin
+out1 =0;
+out2=1;
+out3=0;
+out4 =0; 
+end
+if (out ==2'd0 &&1)  begin
+out1 =0;
+out2=0;
+out3=0;
+out4 =1; 
+end
+if (out ==2'd2 &&0)  begin
+out1 =0;
+out2=1;
+out3=0;
+out4 =0; 
+end
+
+if(out==2'd0 &&0) 
+begin
+        out1 =0;
+        out2=0;
+        out3=0;
+        out4 =1; 
+        end
+  if(left||right) begin
+if(out == 3)
+begin 
+out <= 2'd0;
+end
+else if(left)
+out <= out+2;
+else if (right && out!=0)
+out <= out -2;
+else begin
+out <= out;
+end
+end
+end
+end
+endmodule
+
+module sec2count(in, clk, out);
+input in, clk;
+output reg[1:0] out;
+always@(posedge clk) begin
+if(in)
+if(out == 2'd2)
+out <= 2'd0;
+else 
+out <= out +1;
+else 
+out <= out;
+end
+endmodule
+
+module binAdj(in, me, def, clk, out);
+input in, def, me, clk;
+output reg out;
+always@(posedge clk)begin
+out <= (in&((~def)|me))? out+1:out;
+end
+endmodule
+
+module modes(adj, ala, msec1, msec2, sec1, sec2, min1, min2, hour1, hour2, amin1, amin2, ahour1, ahour2,rst, clk, num1, num2, num3, num4, mode, adjust, alarm , def, led);
+input [3:0] msec1, msec2, sec1, sec2, min1, min2, hour1, hour2, amin1, amin2, ahour1, ahour2;
+input adj, ala, clk, rst;
+output reg[1:0] mode;
+output reg[3:0]num1, num2, num3, num4; 
+output reg adjust, alarm , def, led;
+always@(posedge clk) begin
+if(rst) begin
+num1 <= hour2;
+num2 <= hour1;
+num3 <= min2;
+num4 <= min1;
+mode <= 2'b00;
+alarm <= 0;
+adjust <= 0;
+def <= 1;
+led=0;
+end 
+else begin
+if(ala) begin
+num1 <= ahour2;
+num2 <= ahour1;
+num3 <= amin2;
+num4 <= amin1;
+mode <= 2'b11;
+alarm <= 1;
+adjust <= 0;
+def <= 0;
+led =0;
+end
+else begin
+num1 <= hour2;
+num2 <= hour1;
+num3 <= min2;
+num4 <= min1;
+
+end
+if(adj) begin
+mode <= 2'b01;
+alarm <= 0;
+adjust <= 1;
+def <= 0;
+led =1;
+
+end
+else begin 
+mode <= 2'b00;
+alarm <= 0;
+adjust <= 0;
+def <= 1;
+led=0;
+end
+end
+end
+
+endmodule
+
+
+module all(b1, b2, b3, b4, b5, rst, clk, num, d, out1, out2, out3,out4, dp, led); 
+input clk, b1, b2, b3, b4, b5, rst;
+output [6:0] num;
+output [3:0] d;
+output out1, out2, out3, out4, dp, led;
+wire adjust, alarm , alarmm, clk_mood, def, adj, adjustAlarm, sy2, sy1, sp, ala, flash, on, dclk, dclk1, dclk2, dclk100, db2, db3, db4, db5,sy3,
+ sy4, sy5,re1, re2, re3, re4, re5, db1, go, set, check,hz2,blinkflag;
+wire[3:0] msec1, msec2, sec1, sec2, min1, min2, hour1, hour2, en, amin1,
+ amin2, ahour1, ahour2, num1, num2, num3, num4, x, AlarmNum1,AlarmNum2,AlarmNum3,AlarmNum4;
+wire[1:0] sel, goadj, gostopw, mode, goalarm;
+reg blinkk;
+initial begin blinkk = 0; end
+assign out = flash | adjust;
+ClockDivider #(1) cl1( clk, rst,dclk);
+ClockDivider #(100) cl2( clk, rst,dclk1);  
+ClockDivider #(25) cl3( clk, rst,dclk2);    
+ClockDivider #(200) cl4( clk, rst,dclk100);   
+ClockDivider #(25000000) cl5(clk,rst,hz2);   
+
+debouncer d1 ( b1,dclk1, db1);
+debouncer d2 ( b2,dclk1, db2);
+debouncer d3 ( b3,dclk1, db3);
+debouncer d4 ( b4,dclk1, db4);
+debouncer d5 ( b5,dclk1, db5);
+
+sync s1(db1, dclk1, sy1);
+sync s2(db2, dclk1, sy2);
+sync s3(db3, dclk1, sy3);
+sync s4(db4, dclk1, sy4);
+sync s5(db5, dclk1, sy5);
+
+sec2count adjmode(sy1, dclk, goadj);
+sec2count alarmmode(sy4, dclk, goalarm);
+
+risingEdge e1(sy1, dclk1, re1);
+risingEdge e2(sy2, dclk1, re2);
+risingEdge e3(sy3, dclk1, re3);
+risingEdge e4(sy4, dclk1, re4);
+risingEdge e5(sy5, dclk1, re5);
+
+always @(posedge hz2)
+begin
+blinkk = ~blinkk;
+end
+assign blinkflag = (!adj && !ala);
+assign dp = blinkflag?blinkk:1;
+adjustSwitcher adsw(re2&(adjust|alarm), re5&(adjust|alarm),dclk1, 0, sel, adj, ala, out1, out2,out3,out4);
+binAdj modeadj(re1, adjust, adj|ala, dclk1, adj);
+binAdj modealarm(re4, alarm, adj|ala, dclk1, ala);
+
+modes m( adj, ala, msec1, msec2, sec1, sec2, min1, min2, hour1, hour2, amin1, amin2, ahour1, ahour2, 0, dclk100, num1, num2, num3, num4, mode, adjust, alarm , def, led);
+
+hms h(adj&adjust, (re3|re4)&adjust, re3&adjust, re4&adjust, sel == 0,  sel == 1, sel == 2, sel == 3, dclk1, 0, min1, min2, hour1, hour2);
+binAdj startpause(re3, 1, adj|sw|ala, dclk1, sp);
+
+//alarm22 alm2(sel,re4&alarm,(re3|re4)&alarm, re3&alarm, re4&alarm, AlarmNum1,  AlarmNum2, AlarmNum3, AlarmNum4, amin1, amin2, ahour1, ahour2);
+binAdj alarmset(set|((re1|re2|re3|re4)&on), 1, 1, dclk1, check);
+alarmON alaon(check, hour1, hour2, min1, min2, ahour1, ahour2, amin1, amin2, (re1|re2|re3|re4)&on, dclk100, on);
+
+switcher w(dclk100, en);
+cDisplay cd(en, d);
+segment7 s((en == 4'b0001)? num4: (en == 4'b0010)? num3: (en==4'b0100)? num2: num1 ,num);
+
+endmodule
